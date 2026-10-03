@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.orovion.app",
+      "sha256_cert_fingerprints": [
+        "20:E6:87:37:C2:59:06:A6:70:BE:2D:8B:36:CD:B8:C3:A9:A1:56:44:D7:23:98:63:89:4B:2B:73:00:3F:25:13"
+      ]
+    }
+  }
+]

@@ -1,0 +1,366 @@
+// Generic WebRTC peer wrapper for the web calling system (testing layer).
+// Mirrors the Flutter WebRtcConfig: STUN + optional TURN from NEXT_PUBLIC_* env.
+// Signaling is injected (`send`) so this class stays transport-agnostic.
+
+// Runtime ICE servers fetched per-call from the backend
+// (GET /api/v2/consultations/turn-credentials). Preferred over the compile-time
+// NEXT_PUBLIC_TURN_* env when present, so production TURN needs no rebuild and
+// survives ephemeral-credential rotation. Set via [setRuntimeIceServers] (see
+// src/lib/turnCredentials.ts); cleared at end of call so stale creds aren't reused.
+let runtimeIceServers: RTCIceServer[] | null = null;
+
+export function setRuntimeIceServers(servers: RTCIceServer[] | null) {
+  runtimeIceServers = servers && servers.length ? servers : null;
+}
+
+function serversHaveTurn(servers: RTCIceServer[]): boolean {
+  return servers.some((s) => {
+    const u = s.urls;
+    const list = Array.isArray(u) ? u : [u];
+    return list.some((x) => typeof x === "string" && (x.startsWith("turn:") || x.startsWith("turns:")));
+  });
+}
+
+/** True when a relay is available (runtime creds OR compile-time env). */
+export function hasTurn(): boolean {
+  if (runtimeIceServers && serversHaveTurn(runtimeIceServers)) return true;
+  return Boolean(process.env.NEXT_PUBLIC_TURN_URL && process.env.NEXT_PUBLIC_TURN_USERNAME && process.env.NEXT_PUBLIC_TURN_PASSWORD);
+}
+
+export function iceServers(): RTCIceServer[] {
+  // Runtime creds win outright (they already include STUN from the backend).
+  if (runtimeIceServers) return runtimeIceServers;
+
+  const servers: RTCIceServer[] = [
+    {
+      urls: [
+        "stun:stun.l.google.com:19302",
+        "stun:stun1.l.google.com:19302",
+        "stun:stun2.l.google.com:19302",
+      ],
+    },
+  ];
+  const turnUrl = process.env.NEXT_PUBLIC_TURN_URL;
+  const turnUser = process.env.NEXT_PUBLIC_TURN_USERNAME;
+  const turnPass = process.env.NEXT_PUBLIC_TURN_PASSWORD;
+  const turnTls = process.env.NEXT_PUBLIC_TURN_URL_TLS;
+  if (turnUrl && turnUser && turnPass) {
+    const urls = [turnUrl];
+    if (turnTls) urls.push(turnTls);
+    servers.push({ urls, username: turnUser, credential: turnPass });
+  } else if (typeof window !== "undefined") {
+    console.warn("[WebRTC] No TURN configured — calls may fail on CGNAT/symmetric NAT.");
+  }
+  return servers;
+}
+
+export function rtcConfig(): RTCConfiguration {
+  return {
+    iceServers: iceServers(),
+    iceTransportPolicy: "all", // direct > srflx > relay; relay used only as fallback
+    bundlePolicy: "max-bundle",
+    rtcpMuxPolicy: "require",
+  };
+}
+
+type Send = (event: string, payload: any) => void;
+type Log = (line: string) => void;
+
+export interface CallHandlers {
+  send: Send;
+  onRemoteStream: (s: MediaStream) => void;
+  onConnected: () => void;
+  onIceType?: (dir: "sent" | "recv", type: string) => void;
+  onState?: (state: string) => void;
+  onFailed?: () => void;
+  log?: Log;
+}
+
+/** Owns one RTCPeerConnection for a single call, identified by callId/peerId. */
+export class WebRTCService {
+  pc: RTCPeerConnection | null = null;
+  localStream: MediaStream | null = null;
+  private pending: RTCIceCandidateInit[] = [];
+  private hasRemote = false;
+  private facing: "user" | "environment" = "user";
+  // Serializes incoming-offer processing so two offers (e.g. an initial + a
+  // renegotiation) can't interleave their setRemote→createAnswer→setLocal steps —
+  // the race that throws "Called in wrong state: stable" / "cannot create answer".
+  private negotiation: Promise<void> = Promise.resolve();
+
+  constructor(
+    public callId: string,
+    public peerId: string,
+    public hasVideo: boolean,
+    private h: CallHandlers,
+  ) {}
+
+  private log(s: string) {
+    this.h.log?.(s);
+    console.log(`[WebRTC] ${s}`);
+  }
+
+  async start(): Promise<void> {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const hasAudio = devices.some(d => d.kind === "audioinput");
+      const hasVideo = devices.some(d => d.kind === "videoinput");
+
+      console.log("[WEBRTC] Available devices:", devices.map(d => `${d.kind}: ${d.label || d.deviceId}`).join(", "));
+
+      if (this.hasVideo && !hasVideo) {
+        console.log("[WEBRTC] Video requested but no camera found. Falling back to audio-only.");
+      }
+      if (!hasAudio) {
+        console.log("[WEBRTC] No microphone found in enumeration, but requesting audio anyway to prompt permissions.");
+      }
+
+      // Acquire local media with progressive fallback. A missing camera/mic must
+      // NEVER throw out of start() and kill the call (that left the caller stuck
+      // on "Connecting…"): degrade audio+video → audio-only → no local media.
+      this.localStream = await this.acquireLocalMedia(this.hasVideo && hasVideo);
+      this.log(`local media: ${this.localStream?.getAudioTracks().length || 0}a/${this.localStream?.getVideoTracks().length || 0}v`);
+
+      const pc = new RTCPeerConnection(rtcConfig());
+      console.log("[WEBRTC] createPeerConnection success");
+      this.pc = pc;
+
+      if (this.localStream) {
+        this.localStream.getTracks().forEach((t) => {
+          pc.addTrack(t, this.localStream!);
+          console.log(`[WEBRTC] addTrack: ${t.kind}`);
+        });
+      } else {
+        // No local mic/cam at all → still connect so the user can RECEIVE the
+        // remote audio/video. Without a track or transceiver the offer would
+        // have no media lines and the call would never connect.
+        console.warn("[WEBRTC] No local media available — proceeding recvonly (receive-only).");
+        try { pc.addTransceiver("audio", { direction: "recvonly" }); } catch {}
+        if (this.hasVideo) { try { pc.addTransceiver("video", { direction: "recvonly" }); } catch {} }
+      }
+
+      pc.ontrack = (e) => {
+        if (e.streams[0]) {
+          this.h.onRemoteStream(e.streams[0]);
+          this.h.onConnected();
+        }
+      };
+      pc.onicecandidate = (e) => {
+        if (!e.candidate) return;
+        console.log(`[WEBRTC] ICE_GENERATED: ${e.candidate.candidate}`);
+        this.h.send("webrtc_ice_candidate", {
+          recipientId: this.peerId,
+          callSessionId: this.callId,
+          candidate: {
+            candidate: e.candidate.candidate,
+            sdpMid: e.candidate.sdpMid,
+            sdpMLineIndex: e.candidate.sdpMLineIndex,
+          },
+        });
+        console.log("[WEBRTC] ICE_SENT");
+        this.h.onIceType?.("sent", iceType(e.candidate.candidate));
+      };
+      pc.oniceconnectionstatechange = () => {
+        console.log(`[WEBRTC] ICE_CONNECTION_STATE=${pc.iceConnectionState}`);
+        this.log(`ICE: ${pc.iceConnectionState}`);
+        if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+          this.h.onConnected();
+        }
+        if (pc.iceConnectionState === "failed") this.h.onFailed?.();
+      };
+      pc.onconnectionstatechange = () => {
+        console.log(`[WEBRTC] CONNECTION_STATE=${pc.connectionState}`);
+        this.log(`pc: ${pc.connectionState}`);
+        this.h.onState?.(pc.connectionState);
+        if (pc.connectionState === "failed") this.h.onFailed?.();
+      };
+      pc.onicegatheringstatechange = () => {
+        console.log(`[WEBRTC] ICE_GATHERING_STATE=${pc.iceGatheringState}`);
+      };
+      pc.onsignalingstatechange = () => {
+        console.log(`[WEBRTC] SIGNALING_STATE=${pc.signalingState}`);
+      };
+    } catch (e: any) {
+      console.error(`[WEBRTC] ERROR in src/lib/webrtcService.ts:start - ${e.message}`, e);
+    }
+  }
+
+  /**
+   * Get local media with graceful degradation. Returns `null` (never throws)
+   * when no usable mic/cam exists, so the call can still proceed receive-only.
+   */
+  private async acquireLocalMedia(wantVideo: boolean): Promise<MediaStream | null> {
+    // 1) audio + video (if a camera was requested and found)
+    if (wantVideo) {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: "user" } });
+        console.log("[WEBRTC] getUserMedia(audio+video) success");
+        return s;
+      } catch (e: any) {
+        console.warn(`[WEBRTC] getUserMedia(audio+video) failed: ${e?.name || e}. Trying audio-only.`);
+      }
+    }
+    // 2) audio only
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      console.log("[WEBRTC] getUserMedia(audio-only) success");
+      return s;
+    } catch (e: any) {
+      console.warn(`[WEBRTC] audio-only getUserMedia failed: ${e?.name || e}. Proceeding with NO local media (recvonly).`);
+    }
+    // 3) nothing available
+    return null;
+  }
+
+  /** Swap to the next camera (mobile front/back). On single-camera desktops this is a no-op visually. */
+  async switchCamera(): Promise<void> {
+    if (!this.hasVideo || !this.pc || !this.localStream) return;
+    this.facing = this.facing === "user" ? "environment" : "user";
+    let newStream: MediaStream;
+    try {
+      newStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: this.facing }, audio: false });
+    } catch {
+      return;
+    }
+    const newTrack = newStream.getVideoTracks()[0];
+    if (!newTrack) return;
+    const sender = this.pc.getSenders().find((s) => s.track?.kind === "video");
+    if (sender) await sender.replaceTrack(newTrack);
+    const old = this.localStream.getVideoTracks()[0];
+    if (old) { this.localStream.removeTrack(old); old.stop(); }
+    this.localStream.addTrack(newTrack);
+    this.log(`switched camera → ${this.facing}`);
+  }
+
+  async createOffer() {
+    if (!this.pc) return;
+    try {
+      const offer = await this.pc.createOffer();
+      console.log("[WEBRTC] OFFER_CREATED");
+      await this.pc.setLocalDescription(offer);
+      console.log("[WEBRTC] setLocalDescription(offer) success");
+      this.h.send("webrtc_offer", {
+        recipientId: this.peerId,
+        callSessionId: this.callId,
+        offer: { sdp: offer.sdp, type: offer.type },
+      });
+      console.log("[WEBRTC] OFFER_SENT");
+      this.log("offer sent");
+    } catch (e: any) {
+      console.error(`[WEBRTC] ERROR in src/lib/webrtcService.ts:createOffer - ${e.message}`, e);
+    }
+  }
+
+  /** Serialize so overlapping offers process strictly one-at-a-time (no glare/race). */
+  handleOffer(offer: any): Promise<void> {
+    const next = this.negotiation.then(() => this._handleOffer(offer));
+    this.negotiation = next.catch(() => {}); // one failure must not break the chain
+    return next;
+  }
+
+  private async _handleOffer(offer: any) {
+    const pc = this.pc;
+    if (!pc) return;
+    console.log("[WEBRTC] OFFER_RECEIVED");
+    this.log("offer received");
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      console.log("[WEBRTC] setRemoteDescription(offer) success");
+      // A valid offer leaves us in have-remote-offer. If we're not there (a
+      // concurrent op already answered, or the pc was closed), do NOT answer —
+      // that is exactly what throws "wrong state: stable" / "cannot create answer".
+      if (this.pc !== pc || pc.signalingState !== "have-remote-offer") {
+        console.log(`[WEBRTC] skip answer — signalingState=${pc.signalingState}`);
+        return;
+      }
+      await this.drain();
+      const answer = await pc.createAnswer();
+      console.log("[WEBRTC] ANSWER_CREATED");
+      if (this.pc !== pc || pc.signalingState !== "have-remote-offer") {
+        console.log(`[WEBRTC] abort setLocal(answer) — signalingState=${pc.signalingState}`);
+        return;
+      }
+      await pc.setLocalDescription(answer);
+      console.log("[WEBRTC] setLocalDescription(answer) success");
+      this.h.send("webrtc_answer", {
+        recipientId: this.peerId,
+        callSessionId: this.callId,
+        answer: { sdp: answer.sdp, type: answer.type },
+      });
+      console.log("[WEBRTC] ANSWER_SENT");
+      this.log("answer sent");
+    } catch (e: any) {
+      console.error(`[WEBRTC] ERROR in src/lib/webrtcService.ts:handleOffer - ${e.message}`, e);
+    }
+  }
+
+  async handleAnswer(answer: any) {
+    const pc = this.pc;
+    if (!pc) return;
+    console.log("[WEBRTC] ANSWER_RECEIVED");
+    try {
+      // Only apply an answer when we're actually awaiting one (have-local-offer).
+      // A stale/duplicate answer in 'stable' would throw "wrong state: stable".
+      if (pc.signalingState !== "have-local-offer") {
+        console.log(`[WEBRTC] ignoring answer — signalingState=${pc.signalingState}`);
+        return;
+      }
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      console.log("[WEBRTC] setRemoteDescription(answer) success");
+      await this.drain();
+      this.log("answer received");
+    } catch (e: any) {
+      console.error(`[WEBRTC] ERROR in src/lib/webrtcService.ts:handleAnswer - ${e.message}`, e);
+    }
+  }
+
+  async addIce(candidate: RTCIceCandidateInit) {
+    console.log(`[WEBRTC] ICE_RECEIVED: ${candidate.candidate}`);
+    this.h.onIceType?.("recv", iceType((candidate as any).candidate || ""));
+    if (this.hasRemote && this.pc) {
+      try {
+        await this.pc.addIceCandidate(candidate);
+        console.log("[WEBRTC] ICE_ADDED");
+      } catch (e: any) {
+        console.error(`[WEBRTC] ERROR in src/lib/webrtcService.ts:addIce - ${e.message}`, e);
+      }
+    } else {
+      this.pending.push(candidate);
+      console.log("[WEBRTC] ICE_QUEUED");
+    }
+  }
+
+  private async drain() {
+    this.hasRemote = true;
+    for (const c of this.pending) {
+      try {
+        await this.pc?.addIceCandidate(c);
+        console.log("[WEBRTC] ICE_ADDED (from queue)");
+      } catch (e: any) {
+        console.error(`[WEBRTC] ERROR in src/lib/webrtcService.ts:drain - ${e.message}`, e);
+      }
+    }
+    this.pending = [];
+  }
+
+  toggleMic(on: boolean) {
+    this.localStream?.getAudioTracks().forEach((t) => (t.enabled = on));
+  }
+  toggleCam(on: boolean) {
+    this.localStream?.getVideoTracks().forEach((t) => (t.enabled = on));
+  }
+
+  close() {
+    try { this.pc?.close(); } catch {}
+    this.localStream?.getTracks().forEach((t) => t.stop());
+    this.pc = null;
+    this.localStream = null;
+  }
+}
+
+function iceType(c: string) {
+  if (c.includes("typ relay")) return "relay";
+  if (c.includes("typ srflx")) return "srflx";
+  if (c.includes("typ host")) return "host";
+  return "?";
+}

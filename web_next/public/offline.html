@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orovion — Offline</title>
+    <style>
+      :root { color-scheme: light dark; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex; align-items: center; justify-content: center;
+        font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: #f4fbf8; color: #0e1213; text-align: center; padding: 24px;
+      }
+      @media (prefers-color-scheme: dark) { body { background: #101617; color: #eef7f6; } }
+      .card { max-width: 420px; }
+      .dot { width: 56px; height: 56px; border-radius: 16px; margin: 0 auto 20px;
+        background: #1E7B74; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 24px; }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      p { margin: 0 0 20px; opacity: .75; line-height: 1.5; }
+      button { border: 0; border-radius: 10px; padding: 12px 20px; font-weight: 600;
+        background: #1E7B74; color: #fff; cursor: pointer; font-size: 15px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="dot">O</div>
+      <h1>You're offline</h1>
+      <p>Orovion can't reach the network right now. Pages you've already visited stay available — reconnect to load the rest.</p>
+      <button onclick="location.reload()">Try again</button>
+    </div>
+  </body>
+</html>

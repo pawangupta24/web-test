@@ -1,0 +1,35 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["__APPLE_TEAM_ID__.com.orovion.app"],
+        "components": [
+          { "/": "/", "exclude": true },
+          { "/": "/app", "exclude": true },
+          { "/": "/app/*", "exclude": true },
+          { "/": "/login*", "exclude": true },
+          { "/": "/onboarding*", "exclude": true },
+          { "/": "/help*", "exclude": true },
+          { "/": "/privacy*", "exclude": true },
+          { "/": "/terms*", "exclude": true },
+          { "/": "/team*", "exclude": true },
+          { "/": "/mobile-app*", "exclude": true },
+          { "/": "/brand/*", "exclude": true },
+          { "/": "/api/*", "exclude": true },
+          { "/": "/_next/*", "exclude": true },
+          { "/": "/.well-known/*", "exclude": true },
+          { "/": "/p/*" },
+          { "/": "/pulse/*" },
+          { "/": "/profile/*" },
+          { "/": "/u/*" },
+          { "/": "/post/*" },
+          { "/": "/reel/*" },
+          { "/": "/case/*" },
+          { "/": "/research/*" },
+          { "/": "/thesis/*" },
+          { "/": "/*" }
+        ]
+      }
+    ]
+  }
+}

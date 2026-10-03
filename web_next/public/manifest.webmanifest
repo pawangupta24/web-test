@@ -1,0 +1,15 @@
+{
+  "name": "Orovion — A trusted network of clinicians",
+  "short_name": "Orovion",
+  "description": "The professional network for clinicians, students, and patients.",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4fbf8",
+  "theme_color": "#1E7B74",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
