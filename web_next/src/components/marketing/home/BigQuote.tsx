@@ -4,7 +4,7 @@ import { Link } from "@/lib/router";
 import { HOME } from "@/lib/marketing";
 import { rangeProgress } from "@/lib/motion";
 import { useScrollFrame } from "../useScrollFrame";
-import { Accent } from "../Type";
+import { Accent, FillText } from "../Type";
 import ParallaxImage from "./ParallaxImage";
 import ScrollThread, { type ThreadLine } from "./ScrollThread";
 
@@ -36,7 +36,7 @@ export default function BigQuote() {
   return (
     <section className="relative bg-ink-50">
       <div className="mk-container mk-split items-start pb-20 pt-20 tab:pb-[120px] tab:pt-[120px] desk:pt-40" style={{ ["--mk-gap" as string]: "32px" }}>
-        <h2 className="mk-reveal t-display-sm text-ink-900 text-balance">{s.title} <Accent>{s.accent}</Accent></h2>
+        <h2 className="mk-reveal t-display-sm text-ink-900 text-balance"><FillText>{s.title} <Accent>{s.accent}</Accent></FillText></h2>
         <p className="mk-reveal max-w-[440px] t-body text-ink-600">
           {s.text} <Link to={s.link.to} className="link-u font-semibold text-brand-600">{s.link.label}</Link> {s.tail}
         </p>
@@ -50,7 +50,7 @@ export default function BigQuote() {
         </div>
         <figure className="mk-container absolute inset-x-0 bottom-0 pb-16 desk:pb-20">
           <blockquote className="mk-reveal max-w-[820px] font-display text-[36px] font-medium leading-[1.08] tracking-[-.035em] text-white tab:text-[52px] desk:text-[64px]">
-            “{q.text}”
+            <FillText>{`“${q.text}”`}</FillText>
           </blockquote>
           <figcaption className="mk-reveal mt-8 t-eyebrow !text-white/70">{q.author}</figcaption>
         </figure>

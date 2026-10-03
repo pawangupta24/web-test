@@ -499,14 +499,30 @@ html.lenis { scroll-behavior: auto !important; }
 /* Word-by-word appear: blur 10px → 0, rise 10px, 1.6s, 0.1s stagger from 0.2s. */
 .mk-word { display: inline-block; animation: mk-word 1.6s var(--ease-reveal) var(--mk-wd, 0s) both; }
 .mk-indent { text-indent: calc(20% + 16px); }
-/* Letter fill ("b" wordmark): a colored copy of each letter, clipped away from
-   the top, rises from the bottom while that letter is hovered (0.45s) and
-   drains when the pointer leaves. Insets reach past the letter box so
-   ascenders and descenders fill too. */
-.mk-fill { position: relative; display: inline-block; }
-.mk-fill__ink { position: absolute; inset: 0; color: rgb(var(--brand-400)); pointer-events: none;
-  clip-path: inset(130% -20% -30% -20%); transition: clip-path .45s cubic-bezier(.22, 1, .36, 1); }
-@media (hover: hover) { .mk-fill:hover .mk-fill__ink { clip-path: inset(-30% -20% -30% -20%); } }
+/* Letter fill ("b" wordmark) on headings and big text (`FillText`): while a
+   letter is hovered, color rises in it from the bottom (0.45s) and drains
+   when the pointer leaves. Two text-clipped backgrounds — the fill over the
+   letter's own color (`currentColor`; the glyph itself goes transparent via
+   text-fill-color) — so letters stay plain inline text and words keep their
+   kerning. Mouse/trackpad only: touch screens keep plain text.
+   Fill colors: brand teal on ink text, ink on accent (teal) words; lighter
+   teal / white on the always-dark blocks. */
+:root { --mk-fill-ink: rgb(var(--brand-500)); --mk-fill-ink-accent: rgb(var(--ink-900)); }
+.dark { --mk-fill-ink: rgb(var(--brand-400)); }
+[data-nav-dark="true"], .mk-on-dark { --mk-fill-ink: rgb(var(--brand-400)); --mk-fill-ink-accent: #fff; }
+.mk-accent { --mk-fill-ink: var(--mk-fill-ink-accent); }
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+@media (hover: hover) and (pointer: fine) {
+  .mk-fill {
+    -webkit-text-fill-color: transparent;
+    background-image: linear-gradient(var(--mk-fill-ink), var(--mk-fill-ink)), linear-gradient(currentColor, currentColor);
+    background-repeat: no-repeat; background-position: 0 100%, 0 0; background-size: 100% 0%, 100% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    transition: background-size .45s cubic-bezier(.22, 1, .36, 1);
+  }
+  .mk-fill:hover { background-size: 100% 100%, 100% 100%; }
+}
+}
 
 /* Trust toggle: dot ("start") → switch ("off") → on. Springs 1.2s / 0.8s. */
 .mk-toggle { position: relative; display: block; width: 140px; height: 32px; -webkit-tap-highlight-color: transparent; }
@@ -558,11 +574,13 @@ html.lenis { scroll-behavior: auto !important; }
 }
 .mk-cursor { position: fixed; left: 0; top: 0; z-index: 9998; width: 0; height: 0; pointer-events: none; opacity: 0; transition: opacity .3s var(--ease-reveal); will-change: transform; }
 .mk-cursor.is-visible { opacity: 1; }
-/* Ring + frame invert whatever they pass over (white × difference); over the
+/* Blob + frame invert whatever they pass over (white × difference); over the
    always-dark brand blocks they stay plain white instead of tinting pink. */
 .mk-cursor--follower { mix-blend-mode: difference; }
 .mk-cursor--follower.is-on-dark { mix-blend-mode: normal; }
-.mk-cursor__ring { position: absolute; left: -18px; top: -18px; width: 36px; height: 36px; border: 1px solid #fff; border-radius: 999px; opacity: 0; transform: scale(.4); }
+/* Water blob: a 60px box centered on the follower point; the outline is redrawn every frame. */
+.mk-cursor__blob { position: absolute; left: -30px; top: -30px; width: 60px; height: 60px; overflow: visible; opacity: 0; transform: scale(.4); }
+.mk-cursor__blob path { fill: none; stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .mk-cursor__frame { position: absolute; left: 0; top: 0; width: 36px; height: 36px; border: 1px solid #fff; border-radius: 18px; opacity: 0; transform: translate(-50%, -50%); }
 .mk-cursor__label {
   position: absolute; left: 20px; top: 20px; display: flex; align-items: center; gap: 10px; padding: 11px 18px 10px 20px;

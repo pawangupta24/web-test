@@ -2,6 +2,7 @@
 import { useCallback, useRef, useState } from "react";
 import { HOME } from "@/lib/marketing";
 import { useScrollFrame } from "../useScrollFrame";
+import { Accent, FillText } from "../Type";
 
 /**
  * "How it works" (reference): an oversized two-tone title, an indented intro,
@@ -28,7 +29,7 @@ export default function HowItWorks() {
     <section id="how-it-works" className="relative scroll-mt-24 pt-20 tab:pt-[120px] desk:pt-40">
       <div className="mk-container">
         <h2 className="mk-reveal font-display text-[64px] font-medium leading-[.92] tracking-[-.045em] text-ink-900 tab:text-[96px] desk:text-[128px]">
-          {title.lead} <span className="text-brand-600">{title.accent}</span>
+          <FillText>{title.lead} <Accent>{title.accent}</Accent></FillText>
         </h2>
         <p className="mk-reveal mk-indent mt-10 max-w-[960px] text-lg leading-[1.6] text-ink-700 tab:ml-[22%] tab:mt-14 desk:text-[22px]">{text}</p>
       </div>
@@ -40,8 +41,8 @@ export default function HowItWorks() {
               <span aria-hidden className="font-display text-[88px] font-medium leading-none tracking-[-.06em] text-brand-600 tab:hidden">
                 {String(i + 1).padStart(2, "0")}
               </span>
-              <h3 className="font-display text-[34px] font-medium leading-[1.05] tracking-[-.035em] text-brand-600 tab:text-[44px] desk:text-[56px]">
-                <span className="sr-only">Step {i + 1}: </span>{s.title}
+              <h3 className="mk-accent font-display text-[34px] font-medium leading-[1.05] tracking-[-.035em] text-brand-600 tab:text-[44px] desk:text-[56px]">
+                <span className="sr-only">Step {i + 1}: </span><FillText>{s.title}</FillText>
               </h3>
               <p className="max-w-[480px] t-body text-ink-600">{s.text}</p>
             </li>

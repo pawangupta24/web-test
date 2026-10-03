@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CURSOR_SPRINGS, snapFrame, springSettled, springStep, type SpringState } from "@/lib/motion";
+import { CURSOR_SPRINGS, blobPath, dropStretch, snapFrame, springSettled, springStep, type SpringState } from "@/lib/motion";
 
 const FINE = "(hover: hover) and (pointer: fine)";
 const REDUCED = "(prefers-reduced-motion: reduce)";
@@ -14,14 +14,18 @@ const NATIVE = "input:not([type=checkbox],[type=radio],[type=button],[type=submi
 /** Always-dark blocks (hero stage, big quote, footer) — the follower stays plain white there. */
 const DARK_ZONE = '[data-nav-dark="true"]';
 const RING = 36;
+/** Water blob: ~36px across, 6 wobbling points, irregular by ±20% at rest and up to ±34% when moving fast. */
+const BLOB_RADIUS = 20;
+const BLOB_POINTS = 6;
+const BLOB_AMP = 0.2;
 
 type Mode =
   | { kind: "idle" | "link" | "hidden" }
   | { kind: "snap"; x: number; y: number; w: number; h: number; r: number }
   | { kind: "label"; label: string };
 
-type Channel = "x" | "y" | "ringScale" | "ringOpacity" | "w" | "h" | "r" | "frameOpacity" | "labelScale" | "labelOpacity";
-const CHANNELS: Channel[] = ["x", "y", "ringScale", "ringOpacity", "w", "h", "r", "frameOpacity", "labelScale", "labelOpacity"];
+type Channel = "x" | "y" | "ringScale" | "ringOpacity" | "stretch" | "w" | "h" | "r" | "frameOpacity" | "labelScale" | "labelOpacity";
+const CHANNELS: Channel[] = ["x", "y", "ringScale", "ringOpacity", "stretch", "w", "h", "r", "frameOpacity", "labelScale", "labelOpacity"];
 
 // Kept across page changes, so the cursor of the next page appears in place.
 let lastPointer: { x: number; y: number } | null = null;
@@ -29,8 +33,11 @@ let lastPointer: { x: number; y: number } | null = null;
 /**
  * Custom cursor for the marketing pages (after the "b" reference):
  * - a small dot pinned to the pointer;
- * - a 36px ring that trails it on an overdamped spring and inverts whatever
- *   it passes over (`mix-blend-mode: difference`); over links it grows 1.5×;
+ * - a water blob (outline) that never stops changing shape, trails the
+ *   pointer on an overdamped spring and inverts whatever it passes over
+ *   (`mix-blend-mode: difference`); moving, it stretches along its direction
+ *   of travel and gets more irregular, and it jiggles when it stops; over
+ *   links it grows 1.5×;
  * - over text links and buttons it glides to the element and becomes a frame
  *   5px around it (corners concentric with the element's);
  * - over cards marked `data-cursor="Label"` a brand pill with that label
@@ -59,24 +66,26 @@ export default function Cursor() {
 function CursorLayer() {
   const follower = useRef<HTMLDivElement>(null);
   const tag = useRef<HTMLDivElement>(null);
-  const ring = useRef<HTMLSpanElement>(null);
+  const ring = useRef<SVGSVGElement>(null);
+  const blob = useRef<SVGPathElement>(null);
   const frame = useRef<HTMLSpanElement>(null);
   const label = useRef<HTMLSpanElement>(null);
   const labelText = useRef<HTMLSpanElement>(null);
   const dot = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    const f = follower.current, t = tag.current, rg = ring.current, fr = frame.current, lb = label.current, lt = labelText.current, d = dot.current;
-    if (!f || !t || !rg || !fr || !lb || !lt || !d) return;
+    const f = follower.current, t = tag.current, rg = ring.current, bl = blob.current, fr = frame.current, lb = label.current, lt = labelText.current, d = dot.current;
+    if (!f || !t || !rg || !bl || !fr || !lb || !lt || !d) return;
     const html = document.documentElement;
     const at = (value: number): SpringState => ({ value, velocity: 0 });
     const ch: Record<Channel, SpringState> = {
-      x: at(0), y: at(0), ringScale: at(0.4), ringOpacity: at(0),
+      x: at(0), y: at(0), ringScale: at(0.4), ringOpacity: at(0), stretch: at(0),
       w: at(RING), h: at(RING), r: at(RING / 2), frameOpacity: at(0), labelScale: at(0.4), labelOpacity: at(0),
     };
     let mode: Mode = { kind: "idle" };
     let pointer = lastPointer;
     let visible = false, raf = 0, last = 0;
+    let heading = 0; // direction of travel (rad), held while the drop slows down and jiggles
 
     const show = (on: boolean) => {
       visible = on;
@@ -93,6 +102,7 @@ function CursorLayer() {
         y: snap ? snap.y : pointer?.y ?? 0,
         ringScale: mode.kind === "link" ? 1.5 : ringOn ? 1 : 0.4,
         ringOpacity: ringOn ? 1 : 0,
+        stretch: ringOn ? dropStretch(Math.hypot(ch.x.velocity, ch.y.velocity)) : 0,
         w: snap ? snap.w : RING,
         h: snap ? snap.h : RING,
         r: snap ? snap.r : RING / 2,
@@ -102,12 +112,16 @@ function CursorLayer() {
       };
     };
 
-    const paint = () => {
+    const paint = (now: number) => {
       const pos = `translate3d(${ch.x.value.toFixed(2)}px, ${ch.y.value.toFixed(2)}px, 0)`;
       f.style.transform = pos;
       t.style.transform = pos;
       const op = (c: SpringState) => String(Math.min(1, Math.max(0, c.value)));
-      rg.style.transform = `scale(${ch.ringScale.value.toFixed(4)})`;
+      // The water keeps reshaping while it shows — more irregular the faster it moves.
+      const s = Math.max(-0.4, ch.stretch.value);
+      if (ch.ringOpacity.value > 0.001) bl.setAttribute("d", blobPath(now / 1000, BLOB_AMP + Math.abs(s) * 0.4, BLOB_RADIUS, BLOB_POINTS));
+      // ...and stretches along its heading (area kept).
+      rg.style.transform = `scale(${ch.ringScale.value.toFixed(4)}) rotate(${heading.toFixed(4)}rad) scale(${(1 + s).toFixed(4)}, ${(1 / Math.sqrt(1 + s)).toFixed(4)}) rotate(${(-heading).toFixed(4)}rad)`;
       rg.style.opacity = op(ch.ringOpacity);
       fr.style.width = `${Math.max(0, ch.w.value).toFixed(2)}px`;
       fr.style.height = `${Math.max(0, ch.h.value).toFixed(2)}px`;
@@ -120,16 +134,20 @@ function CursorLayer() {
     const tick = (now: number) => {
       const dt = last ? now - last : 16;
       last = now;
+      if (Math.hypot(ch.x.velocity, ch.y.velocity) > 40) heading = Math.atan2(ch.y.velocity, ch.x.velocity);
       const goal = targets();
       let busy = false;
       for (const k of CHANNELS) {
         const position = k === "x" || k === "y";
         const px = position || k === "w" || k === "h" || k === "r";
-        ch[k] = springStep(ch[k], goal[k], dt, position ? CURSOR_SPRINGS.follow : CURSOR_SPRINGS.shape);
+        const spring = position ? CURSOR_SPRINGS.follow : k === "stretch" ? CURSOR_SPRINGS.wobble : CURSOR_SPRINGS.shape;
+        ch[k] = springStep(ch[k], goal[k], dt, spring);
         if (springSettled(ch[k], goal[k], px ? 0.05 : 0.001)) ch[k] = at(goal[k]);
         else busy = true;
       }
-      paint();
+      // The water never holds still while it shows: keep the frames coming.
+      if (visible && ch.ringOpacity.value > 0.001) busy = true;
+      paint(now);
       raf = busy ? requestAnimationFrame(tick) : 0;
       if (!busy) last = 0;
     };
@@ -219,7 +237,7 @@ function CursorLayer() {
   return (
     <>
       <div ref={follower} className="mk-cursor mk-cursor--follower" aria-hidden>
-        <span ref={ring} className="mk-cursor__ring" />
+        <svg ref={ring} className="mk-cursor__blob" viewBox="-30 -30 60 60"><path ref={blob} d={blobPath(0, BLOB_AMP, BLOB_RADIUS, BLOB_POINTS)} /></svg>
         <span ref={frame} className="mk-cursor__frame" />
       </div>
       <div ref={tag} className="mk-cursor" aria-hidden>

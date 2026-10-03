@@ -7,12 +7,12 @@ Building blocks for the public marketing pages. Motion spec and inventory:
 |---|---|
 | `MarketingShell` | Page frame: skip link, `MotionRoot`, `BlurGradient`, `SiteNav`, `<main>`, `SiteFooter`. Wrap every public page in it. |
 | `MotionRoot` | Lenis smooth scroll (desktop, not under reduced motion) and the shared `.mk-reveal` IntersectionObserver. Renders nothing. |
-| `Cursor` | Custom cursor (mouse/trackpad only): dot + trailing ring, a frame that snaps around text links and buttons, label pills over cards. Modes come from `data-cursor` (see Rules). |
+| `Cursor` | Custom cursor (mouse/trackpad only): dot + a trailing water blob that keeps changing shape and stretches as it moves, a frame that snaps around text links and buttons, label pills over cards. Modes come from `data-cursor` (see Rules). |
 | `BlurGradient` | 220px progressive blur under the transparent desktop nav. |
 | `SiteNav` / `MobileMenu` | Fixed nav (load stagger, white over the footer) and the full-screen tablet/phone menu. |
 | `SiteFooter` / `FooterBackdrop` | Full-viewport footer on the parallax brand scene. |
 | `PillButton` | Dot-swap pill (`variant` brand/light, `state` idle/loading/success). Link or button. |
-| `Type` | `Eyebrow`, `Display`, `Accent`, and `enter(delay, from)` for load entrances. |
+| `Type` | `Eyebrow`, `Display`, `Accent`, `enter(delay, from)` for load entrances, and `FillText` — big text whose letters fill with color on hover (used inside `Display`). |
 | `Links` | `WipeLink` (underline wipe) and `SocialLinks`. |
 | `Trust` | `AvatarStack` and `TrustBlock` (label, faces, rating). |
 | `Accordion` / `FaqSection` | FAQ cards and the two-column FAQ band. |
@@ -37,7 +37,7 @@ Building blocks for the public marketing pages. Motion spec and inventory:
 | `Numbers` | Statement + count-up `STATS`. |
 | `ScrollThread` | SVG strokes that draw themselves on scroll (`pathLength=1` + dash offset, smoothed). |
 | `ParallaxImage` | Image that drifts inside its frame on scroll (`intensity` px), optional grain. |
-| `TextEffects` | `BlurWords` (load, word by word) and `ScrollWords` (scroll-lit words, screen-reader safe). |
+| `TextEffects` | `BlurWords` (load, word by word; `fill` adds the letter fill, used on the hero headline) and `ScrollWords` (scroll-lit words, letters fill too). Both are screen-reader safe. |
 
 Rules:
 

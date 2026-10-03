@@ -2,6 +2,7 @@
 import { Link } from "@/lib/router";
 import { HOME } from "@/lib/marketing";
 import ParallaxImage from "./ParallaxImage";
+import { FillText } from "../Type";
 
 /**
  * Four tall image cards right after the trust toggle (reference "Our
@@ -24,8 +25,8 @@ export default function Services() {
               imgClassName="saturate-[.8]"
             />
             <div aria-hidden className="absolute inset-0 bg-gradient-to-b from-brand-950/55 via-brand-950/10 to-brand-950/75" />
-            <h3 className="absolute left-6 right-6 top-6 font-display text-[32px] font-medium leading-[1.02] tracking-[-.03em] text-white desk:text-[34px] wide:text-[38px]">
-              {s.title}
+            <h3 className="mk-on-dark absolute left-6 right-6 top-6 font-display text-[32px] font-medium leading-[1.02] tracking-[-.03em] text-white desk:text-[34px] wide:text-[38px]">
+              <FillText>{s.title}</FillText>
             </h3>
             <p className="absolute bottom-20 left-6 right-6 max-w-[300px] t-small text-white/90">{s.text}</p>
             <span className="absolute bottom-6 left-6 flex items-center gap-4">

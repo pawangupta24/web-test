@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parallaxTravel, parallaxProgress, parallaxOffset, isOverDarkSection, isInsideDarkZone, NAV_SWAP_LINE,
   rangeProgress, drawProgress, dashOffset, revealProgress, wordOpacity, imageParallaxY, fadeThrough, toggleState, smoothToward,
-  springStep, springSettled, snapFrame, CURSOR_SPRINGS, type SpringConfig, dropStretch,
+  springStep, springSettled, snapFrame, CURSOR_SPRINGS, type SpringConfig, dropStretch, blobRadii, blobPath,
 } from "../motion";
 
 describe("parallaxTravel", () => {
@@ -246,5 +246,38 @@ describe("CURSOR_SPRINGS.wobble", () => {
     for (let t = 0; t < 800; t += 16) { s = springStep(s, 0, 16, CURSOR_SPRINGS.wobble); min = Math.min(min, s.value); }
     expect(min).toBeLessThan(-0.02);
     expect(Math.abs(s.value)).toBeLessThan(0.01);
+  });
+});
+
+describe("blobRadii", () => {
+  it("gives one radius factor per point, within 1 ± amp, and a circle at amp 0", () => {
+    for (const t of [0, 0.7, 3.1, 42]) {
+      const k = blobRadii(t, 0.2, 7);
+      expect(k).toHaveLength(7);
+      k.forEach((m) => { expect(m).toBeGreaterThanOrEqual(0.8 - 1e-9); expect(m).toBeLessThanOrEqual(1.2 + 1e-9); });
+    }
+    expect(blobRadii(5, 0, 7).every((m) => m === 1)).toBe(true);
+  });
+
+  it("is irregular (points differ) and keeps changing over time", () => {
+    const a = blobRadii(1, 0.2), b = blobRadii(1.5, 0.2);
+    expect(Math.max(...a) - Math.min(...a)).toBeGreaterThan(0.05);
+    expect(a.some((m, i) => Math.abs(m - b[i]) > 0.01)).toBe(true);
+  });
+});
+
+describe("blobPath", () => {
+  it("is a closed smooth path, deterministic for a given time", () => {
+    const d = blobPath(2, 0.15);
+    expect(d.startsWith("M")).toBe(true);
+    expect(d.endsWith("Z")).toBe(true);
+    expect(d.match(/Q/g)).toHaveLength(7);
+    expect(blobPath(2, 0.15)).toBe(d);
+    expect(blobPath(2.4, 0.15)).not.toBe(d);
+  });
+
+  it("stays within radius × (1 + amp) of the center", () => {
+    const nums = blobPath(7.3, 0.2, 20).match(/-?\d+(\.\d+)?/g)!.map(Number);
+    for (let i = 0; i < nums.length; i += 2) expect(Math.hypot(nums[i], nums[i + 1])).toBeLessThanOrEqual(20 * 1.2 + 0.01);
   });
 });

@@ -76,6 +76,7 @@ toggle's three states go through React state.
 | Hero stage | scroll | pinned (`sticky`) behind the hero and the toggle | — | all |
 | Portrait | scroll | opacity 1 → 0 over the hero's height, uncovering the brand backdrop | linear | all |
 | Headline | load | word by word: blur 10px → 0, rise 10px, fade | 1.6s `--ease-reveal`, from 0.2s, +0.1s per word | all |
+| Headline letters | hover | letter fill — see "Letter fill" below | 0.45s | mouse/trackpad |
 | Paragraph / CTA | load | fade + drop from −20px / fade + rise 20px | 1s, 0.4s | desktop only |
 | Paragraph + CTA | scroll | lag the page (move at 70% speed) | — | desktop |
 | Hero thread | scroll | two strokes draw (`stroke-dashoffset` 1 → 0) from "box top at 50% of the screen" to "box bottom at 50%"; smoothed (τ 150ms) | — | tablet + desktop |
@@ -115,9 +116,10 @@ Measured from a second reference site and rebuilt on Orovion's tokens.
 | Part | Behavior | Values |
 |---|---|---|
 | Dot | pinned to the pointer | 4px, `--tx-brand-600`, 1px ring in the page color (so it reads on brand fills) |
-| Ring | trails the pointer and inverts what it passes over (`mix-blend-mode: difference`); plain white over `data-nav-dark` blocks | 36px, 1px line; follow spring 220 / 26 / mass 0.6, so no overshoot and ~90% of a jump in 0.26s |
-| Ring over a link or button | grows | ×1.5; shape spring 380 / 26 (~6% bounce) |
-| Snap (text links, buttons) | glides to the element's center and becomes a frame around it; the ring shrinks to ×0.4 and fades | 5px outside every edge, radius = element radius + 5 (at most a pill); shape spring |
+| Water blob | an irregular outline that never stops changing shape; trails the pointer and inverts what it passes over (`mix-blend-mode: difference`); plain white over `data-nav-dark` blocks | ~36px, 1px line; 6 points whose radii follow layered sines (periods 1.6–4.2s, golden-angle phases) ±20%; follow spring 220 / 26 / mass 0.6, so no overshoot and ~90% of a jump in 0.26s |
+| Blob in motion | stretches along its direction of travel (area kept), gets more irregular (up to ±34%), jiggles once it stops | stretch up to +35%: `0.35 · (1 − e^(−speed/1500))`; wobble spring 260 / 14 |
+| Blob over a link or button | grows | ×1.5; shape spring 380 / 26 (~6% bounce) |
+| Snap (text links, buttons) | glides to the element's center and becomes a frame around it; the blob shrinks to ×0.4 and fades | 5px outside every edge, radius = element radius + 5 (at most a pill); shape spring |
 | Snap target resizes (FAQ card opening) | the frame follows, even with a still pointer | ResizeObserver |
 | Label (cards) | brand pill 20px right of and below the pointer | scale 0.4 → 1 + fade; shape spring |
 | Text fields | the custom cursor steps aside; the native I-beam shows | — |
@@ -134,6 +136,32 @@ Which mode an element gets:
   cards "Explore", community posts "Read", team cards "View".
 - **`data-cursor="native"`:** hides the custom cursor over that area.
 - **Any other link or button:** the ring grows.
+
+## Letter fill
+
+After the "b" reference wordmark. While the pointer is over a letter of a
+heading or other big text, color rises inside that letter from the bottom
+(0.45s, `cubic-bezier(.22,1,.36,1)`). It drains when the pointer leaves.
+Mouse and trackpad only: touch screens keep plain text.
+
+- **Where:** every `Display` heading, plus the hero headline, the
+  trust-toggle text, the big quote and its statement heading, How It Works
+  (title and step titles), the Philosophy text, the service card titles and
+  the footer heading. Numbers that count up are left out.
+- **How:** `FillText` (in `Type.tsx`) splits text into plain inline letter
+  spans, so words keep their kerning, and gives screen readers the sentence
+  once. Each letter paints two text-clipped backgrounds: the fill over its
+  own color (`currentColor`).
+- **Colors:**
+
+  | Text | Fill |
+  |---|---|
+  | ink text | `--brand-500` (`--brand-400` in dark mode) |
+  | teal accent words (`<Accent>`, `.mk-accent`) | `--ink-900` |
+  | on always-dark blocks (`data-nav-dark`, `.mk-on-dark`) | `--brand-400`; accent words fill white |
+
+- **New big text:** wrap it in `<FillText>`. It only splits text-level
+  content; a heading containing a link is left as is.
 
 ## Using it on a new section
 

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { useScrollFrame } from "../useScrollFrame";
 import { NAV_ZONES_EVENT } from "../SiteNav";
 import PillButton from "../PillButton";
-import { Accent, enter } from "../Type";
+import { Accent, FillText, enter } from "../Type";
 import ScrollThread, { type ThreadLine } from "./ScrollThread";
 import { BlurWords } from "./TextEffects";
 
@@ -115,11 +115,11 @@ export default function HeroSequence() {
           </a>
           <div className="relative w-full max-w-[1200px]">
             <div className={cn("mk-swap-after mx-auto flex max-w-[800px] flex-col items-center gap-8", on && "is-on")}>
-              <h2 className="t-display-sm text-ink-900 text-balance">{trust.after.title} <Accent>{trust.after.accent}</Accent></h2>
+              <h2 className="t-display-sm text-ink-900 text-balance"><FillText>{trust.after.title} <Accent>{trust.after.accent}</Accent></FillText></h2>
               <p className="max-w-[440px] t-body text-ink-600">{trust.after.text}</p>
             </div>
             <div className={cn("mk-swap-before absolute inset-x-0 top-0 mx-auto flex max-w-[800px] flex-col items-center gap-8", on && "is-on")} aria-hidden={on}>
-              <p className="t-display-sm text-white text-balance">{trust.before.title}</p>
+              <p className="t-display-sm text-white text-balance"><FillText>{trust.before.title}</FillText></p>
               <p className="max-w-[440px] t-body text-white">{trust.before.lines[0]}<br />{trust.before.lines[1]}</p>
             </div>
           </div>

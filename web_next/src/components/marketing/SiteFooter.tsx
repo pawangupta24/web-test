@@ -6,6 +6,7 @@ import { CONTACT_ADDRESS, CONTACT_EMAIL, CONTACT_PHONE, CONTACT_PHONE_HREF } fro
 import FooterBackdrop from "./FooterBackdrop";
 import { SocialLinks, WipeLink } from "./Links";
 import PillButton from "./PillButton";
+import { FillText } from "./Type";
 import { DARK_SECTION_ID } from "@/lib/motion";
 
 /**
@@ -22,7 +23,7 @@ export default function SiteFooter() {
         <div className="grid gap-20 tab:gap-[120px] desk:grid-cols-[6fr_2fr_4fr] desk:gap-0">
           <div className="flex flex-col gap-12 desk:gap-14">
             <div className="flex flex-col gap-6">
-              <h2 className="mk-reveal t-display text-white">Join the network<br />built on trust.</h2>
+              <h2 className="mk-reveal t-display text-white"><FillText>Join the network<br />built on trust.</FillText></h2>
               <p className="mk-reveal max-w-[480px] t-body text-white/65">
                 Create your profile and connect with verified healthcare professionals,
                 medical students and people looking for trusted guidance.

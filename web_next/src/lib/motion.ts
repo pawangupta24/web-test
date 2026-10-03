@@ -154,7 +154,39 @@ export const CURSOR_SPRINGS = {
 } as const satisfies Record<string, SpringConfig>;
 
 /**
- * How far the water-drop cursor stretches along its direction of travel at a
+ * Radius factors (1 ± amp) for the points of the water-blob cursor at time
+ * `t` (s): layered slow sines with per-point phases spread by the golden
+ * angle, so the outline stays irregular and never visibly loops.
+ */
+export function blobRadii(t: number, amp: number, n = 7): number[] {
+  return Array.from({ length: n }, (_, i) => {
+    const p = i * 2.399963;
+    const wave = 0.55 * Math.sin(t * 2.4 + p) + 0.3 * Math.sin(t * 1.5 + p * 1.7) + 0.15 * Math.sin(t * 3.9 + p * 2.3);
+    return 1 + amp * wave;
+  });
+}
+
+/**
+ * The water blob's outline at time `t` (s), centered on 0,0: `n` wobbling
+ * points (slowly turning) joined by quadratic curves through their midpoints —
+ * smooth everywhere. The curve sits at ~0.9 × `radius`.
+ */
+export function blobPath(t: number, amp: number, radius = 20, n = 7): string {
+  const k = blobRadii(t, amp, n);
+  const turn = t * 0.5;
+  const pts = k.map((m, i) => {
+    const a = turn + (i / n) * Math.PI * 2;
+    return [Math.cos(a) * radius * m, Math.sin(a) * radius * m];
+  });
+  const f = (v: number) => v.toFixed(2);
+  const mid = (a: number[], b: number[]) => `${f((a[0] + b[0]) / 2)} ${f((a[1] + b[1]) / 2)}`;
+  let d = `M${mid(pts[n - 1], pts[0])}`;
+  for (let i = 0; i < n; i++) d += `Q${f(pts[i][0])} ${f(pts[i][1])} ${mid(pts[i], pts[(i + 1) % n])}`;
+  return `${d}Z`;
+}
+
+/**
+ * How far the water cursor stretches along its direction of travel at a
  * given speed (px/s): 0 at rest, easing toward +35%.
  */
 export function dropStretch(speed: number): number {
